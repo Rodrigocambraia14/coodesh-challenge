@@ -35,5 +35,8 @@ public class CreateUserRequest
     /// <summary>
     /// Gets or sets the role assigned to the user.
     /// </summary>
+    /// <remarks>
+    /// This value is an enum serialized as an integer. See OpenAPI schema for the mapping (e.g. 1=Customer, 2=Manager).
+    /// </remarks>
     public UserRole Role { get; set; }
 }

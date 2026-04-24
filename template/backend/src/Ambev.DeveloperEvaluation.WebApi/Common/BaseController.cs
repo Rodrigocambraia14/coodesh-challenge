@@ -13,8 +13,9 @@ public class BaseController : ControllerBase
     protected string GetCurrentUserEmail() =>
         User.FindFirst(ClaimTypes.Email)?.Value ?? throw new NullReferenceException();
 
-    protected IActionResult Ok<T>(T data) =>
-            base.Ok(new ApiResponseWithData<T> { Data = data, Success = true });
+    /// <summary>Wraps payload in <see cref="ApiResponseWithData{T}"/>. If the body is already that type, use <c>base.Ok(...)</c> instead.</summary>
+    protected IActionResult OkData<T>(T data) =>
+        base.Ok(new ApiResponseWithData<T> { Data = data, Success = true });
 
     protected IActionResult Created<T>(string routeName, object routeValues, T data) =>
         base.CreatedAtRoute(routeName, routeValues, new ApiResponseWithData<T> { Data = data, Success = true });
@@ -26,12 +27,12 @@ public class BaseController : ControllerBase
         base.NotFound(new ApiResponse { Message = message, Success = false });
 
     protected IActionResult OkPaginated<T>(PaginatedList<T> pagedList) =>
-            Ok(new PaginatedResponse<T>
-            {
-                Data = pagedList,
-                CurrentPage = pagedList.CurrentPage,
-                TotalPages = pagedList.TotalPages,
-                TotalCount = pagedList.TotalCount,
-                Success = true
-            });
+        base.Ok(new PaginatedResponse<T>
+        {
+            Data = pagedList,
+            CurrentPage = pagedList.CurrentPage,
+            TotalPages = pagedList.TotalPages,
+            TotalCount = pagedList.TotalCount,
+            Success = true
+        });
 }

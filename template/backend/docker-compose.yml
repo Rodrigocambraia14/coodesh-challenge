@@ -1,6 +1,16 @@
 version: '3.8'
 
 services:
+  ambev.developerevaluation.frontend:
+    container_name: ambev_developer_evaluation_frontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - ambev.developerevaluation.webapi
+    ports:
+      - "4200:80"
+
   ambev.developerevaluation.webapi:
     container_name: ambev_developer_evaluation_webapi
     image: ${DOCKER_REGISTRY-}ambevdeveloperevaluationwebapi
@@ -9,14 +19,17 @@ services:
       dockerfile: src/Ambev.DeveloperEvaluation.WebApi/Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ASPNETCORE_HTTPS_PORTS=8081
+      # HTTP only behind frontend nginx; TLS is not terminated on the API in this stack.
+      - ASPNETCORE_URLS=http://+:8080
+      # Avoid redirect to https://localhost:<random-8081-map> (different origin → CORS on preflight).
+      - DISABLE_HTTPS_REDIRECT=true
     ports:
       - "8080"
-      - "8081"
     volumes:
       - ${APPDATA}/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
       - ${APPDATA}/ASP.NET/Https:/home/app/.aspnet/https:ro
+    depends_on:
+      - ambev.developerevaluation.database
 
   ambev.developerevaluation.database:
     container_name: ambev_developer_evaluation_database

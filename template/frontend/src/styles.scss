@@ -1,0 +1,85 @@
+@use '@angular/material' as mat;
+
+@font-face {
+  font-family: 'DIN Next Rounded';
+  src: local('DIN Next Rounded'), local('DINNextRounded'), local('DIN Next Rounded LT Pro');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --ambev-blue: #273386;
+  --ambev-dark: #232323;
+  --ambev-light: #e8e8e8;
+  --app-bg: #f4f5f8;
+  --app-surface: #ffffff;
+  --app-text: #1c1c1c;
+  --app-text-muted: rgba(35, 35, 35, 0.62);
+  --app-border: rgba(39, 51, 134, 0.12);
+}
+
+html {
+  color-scheme: light;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--app-bg);
+  color: var(--app-text);
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Angular Material — tema claro */
+$theme: mat.define-theme(
+  (
+    color: (
+      theme-type: light,
+      primary: mat.$azure-palette,
+      tertiary: mat.$cyan-palette
+    ),
+    typography: (
+      brand-family: 'Plus Jakarta Sans',
+      plain-family: 'Plus Jakarta Sans'
+    ),
+    density: (
+      scale: 0
+    )
+  )
+);
+
+@include mat.core();
+@include mat.all-component-themes($theme);
+
+/* Inputs em formato pill (Material MDC) */
+.mat-mdc-form-field.mat-form-field-appearance-outline {
+  --mdc-outlined-text-field-container-shape: 9999px;
+}
+
+.mat-mdc-form-field-appearance-outline .mat-mdc-text-field-wrapper {
+  border-radius: 9999px;
+}
+
+.mat-mdc-form-field-appearance-outline .mdc-notched-outline__leading {
+  border-radius: 9999px 0 0 9999px;
+  width: 28px !important;
+}
+
+.mat-mdc-form-field-appearance-outline .mdc-notched-outline__trailing {
+  border-radius: 0 9999px 9999px 0;
+}
+
+.mat-mdc-form-field-appearance-outline .mat-mdc-form-field-infix {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.mat-mdc-unelevated-button,
+.mat-mdc-outlined-button,
+.mat-mdc-raised-button {
+  border-radius: 9999px !important;
+}

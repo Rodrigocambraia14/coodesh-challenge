@@ -1,4 +1,5 @@
 using Ambev.DeveloperEvaluation.Domain.Entities;
+using Ambev.DeveloperEvaluation.Domain.Enums;
 
 namespace Ambev.DeveloperEvaluation.Domain.Repositories;
 
@@ -38,4 +39,17 @@ public interface IUserRepository
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if the user was deleted, false if not found</returns>
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Atualiza um utilizador existente.</summary>
+    Task<User> UpdateAsync(User user, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pesquisa utilizadores por nome ou e-mail, com paginação (para seleção em vendas / backoffice).
+    /// </summary>
+    Task<(IReadOnlyList<User> Items, int TotalCount)> SearchAsync(
+        string? search,
+        UserRole? role,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

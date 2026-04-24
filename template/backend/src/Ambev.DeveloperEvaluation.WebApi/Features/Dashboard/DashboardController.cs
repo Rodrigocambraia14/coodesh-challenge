@@ -131,8 +131,11 @@ public sealed class DashboardController : ControllerBase
                 s => s.Id,
                 (i, s) => new { Item = i, Sale = s });
 
-        var grossRevenue = await itemsInRange.SumAsync(x => x.Item.UnitPrice * x.Item.Quantity, cancellationToken);
-        var netRevenue = await itemsInRange.SumAsync(x => x.Item.TotalItemAmount, cancellationToken);
+        // SQLite has limitations summing decimals; compute in double and convert back.
+        var grossRevenueD = await itemsInRange.SumAsync(x => (double)(x.Item.UnitPrice * x.Item.Quantity), cancellationToken);
+        var netRevenueD = await itemsInRange.SumAsync(x => (double)x.Item.TotalItemAmount, cancellationToken);
+        var grossRevenue = Convert.ToDecimal(grossRevenueD);
+        var netRevenue = Convert.ToDecimal(netRevenueD);
         var totalDiscountAmount = grossRevenue - netRevenue;
 
         var timeSeries = await BuildTimeSeriesAsync(salesInRange, groupBy, cancellationToken);
@@ -149,21 +152,34 @@ public sealed class DashboardController : ControllerBase
             .Take(400)
             .ToListAsync(cancellationToken);
 
-        var topProducts = await itemsInRange
+        // SQLite has limitations summing decimals; project in double then map.
+        var topProductRows = await itemsInRange
             .GroupBy(x => new { x.Item.Product.ExternalId, x.Item.Product.Description })
-            .Select(g => new DashboardTopProductRow
+            .Select(g => new
             {
                 ProductId = g.Key.ExternalId,
                 ProductName = g.Key.Description,
                 QuantitySold = g.Sum(x => x.Item.Quantity),
-                GrossAmount = g.Sum(x => x.Item.UnitPrice * x.Item.Quantity),
-                NetAmount = g.Sum(x => x.Item.TotalItemAmount),
-                DiscountAmount = g.Sum(x => (x.Item.UnitPrice * x.Item.Quantity) - x.Item.TotalItemAmount)
+                GrossAmount = g.Sum(x => (double)(x.Item.UnitPrice * x.Item.Quantity)),
+                NetAmount = g.Sum(x => (double)x.Item.TotalItemAmount),
+                DiscountAmount = g.Sum(x => (double)((x.Item.UnitPrice * x.Item.Quantity) - x.Item.TotalItemAmount))
             })
             .OrderByDescending(r => r.QuantitySold)
             .ThenByDescending(r => r.NetAmount)
             .Take(10)
             .ToListAsync(cancellationToken);
+
+        var topProducts = topProductRows
+            .Select(r => new DashboardTopProductRow
+            {
+                ProductId = r.ProductId,
+                ProductName = r.ProductName,
+                QuantitySold = r.QuantitySold,
+                GrossAmount = Convert.ToDecimal(r.GrossAmount),
+                NetAmount = Convert.ToDecimal(r.NetAmount),
+                DiscountAmount = Convert.ToDecimal(r.DiscountAmount)
+            })
+            .ToList();
 
         return new DashboardResponse
         {
@@ -190,34 +206,62 @@ public sealed class DashboardController : ControllerBase
     {
         if (groupBy == DashboardGroupBy.Day)
         {
-            return await salesInRange
+            var rows = await salesInRange
                 .GroupBy(s => new { s.Date.Year, s.Date.Month, s.Date.Day })
-                .Select(g => new DashboardTimeSeriesPoint
+                .Select(g => new
                 {
-                    Period = $"{g.Key.Year:D4}-{g.Key.Month:D2}-{g.Key.Day:D2}",
+                    g.Key.Year,
+                    g.Key.Month,
+                    g.Key.Day,
                     TotalSales = g.Count(),
                     CancelledSales = g.Count(s => s.Cancelled),
-                    NetRevenue = g.Sum(s => s.TotalSaleAmount),
+                    NetRevenue = g.Sum(s => (double)s.TotalSaleAmount),
                     DiscountAmount = 0m
                 })
-                .OrderBy(p => p.Period)
+                .OrderBy(r => r.Year)
+                .ThenBy(r => r.Month)
+                .ThenBy(r => r.Day)
                 .ToListAsync(cancellationToken);
+
+            return rows
+                .Select(r => new DashboardTimeSeriesPoint
+                {
+                    Period = $"{r.Year:D4}-{r.Month:D2}-{r.Day:D2}",
+                    TotalSales = r.TotalSales,
+                    CancelledSales = r.CancelledSales,
+                    NetRevenue = Convert.ToDecimal(r.NetRevenue),
+                    DiscountAmount = r.DiscountAmount
+                })
+                .ToList();
         }
 
         if (groupBy == DashboardGroupBy.Month)
         {
-            return await salesInRange
+            var rows = await salesInRange
                 .GroupBy(s => new { s.Date.Year, s.Date.Month })
-                .Select(g => new DashboardTimeSeriesPoint
+                .Select(g => new
                 {
-                    Period = $"{g.Key.Year:D4}-{g.Key.Month:D2}",
+                    g.Key.Year,
+                    g.Key.Month,
                     TotalSales = g.Count(),
                     CancelledSales = g.Count(s => s.Cancelled),
-                    NetRevenue = g.Sum(s => s.TotalSaleAmount),
+                    NetRevenue = g.Sum(s => (double)s.TotalSaleAmount),
                     DiscountAmount = 0m
                 })
-                .OrderBy(p => p.Period)
+                .OrderBy(r => r.Year)
+                .ThenBy(r => r.Month)
                 .ToListAsync(cancellationToken);
+
+            return rows
+                .Select(r => new DashboardTimeSeriesPoint
+                {
+                    Period = $"{r.Year:D4}-{r.Month:D2}",
+                    TotalSales = r.TotalSales,
+                    CancelledSales = r.CancelledSales,
+                    NetRevenue = Convert.ToDecimal(r.NetRevenue),
+                    DiscountAmount = r.DiscountAmount
+                })
+                .ToList();
         }
 
         // Week: compute in-memory due to translation variability across providers.

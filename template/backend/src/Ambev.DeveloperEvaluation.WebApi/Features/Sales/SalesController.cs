@@ -9,6 +9,7 @@ using Ambev.DeveloperEvaluation.Application.Sales.UpdateSale;
 using Ambev.DeveloperEvaluation.Common.Caching;
 using Ambev.DeveloperEvaluation.WebApi.Common;
 using Ambev.DeveloperEvaluation.WebApi.Features.Sales.CreateSale;
+using Ambev.DeveloperEvaluation.WebApi.Features.Sales.PreviewSale;
 using Ambev.DeveloperEvaluation.WebApi.Features.Sales.GetSale;
 using Ambev.DeveloperEvaluation.WebApi.Features.Sales.ListSales;
 using Ambev.DeveloperEvaluation.WebApi.Features.Sales.UpdateSale;
@@ -50,6 +51,25 @@ public class SalesController : BaseController
     [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateSaleRequest request, CancellationToken cancellationToken)
     {
+        // Enforce blocking rule even if client skips preview step.
+        // IMPORTANT: use preview validator here so qty > 20 does not short-circuit into a generic validation error.
+        var previewValidator = new PreviewSaleRequestValidator();
+        var previewValidation = await previewValidator.ValidateAsync(request, cancellationToken);
+        if (!previewValidation.IsValid)
+            return BadRequest(previewValidation.Errors);
+
+        var preview = BuildPreview(request);
+        if (preview.IsBlocked)
+        {
+            return BadRequest(new ApiResponseWithData<PreviewSaleResponse>
+            {
+                Success = false,
+                Message = "Existem itens que infringem regras e impedem a finalização do pedido.",
+                Data = preview
+            });
+        }
+
+        // Now run the strict validator for create (includes domain limits).
         var validator = new CreateSaleRequestValidator();
         var validationResult = await validator.ValidateAsync(request, cancellationToken);
         if (!validationResult.IsValid)
@@ -67,6 +87,109 @@ public class SalesController : BaseController
             Message = "Sale created successfully",
             Data = _mapper.Map<SaleResponse>(result)
         });
+    }
+
+    /// <summary>
+    /// Previews discounts and blocking rules for a sale without persisting it.
+    /// </summary>
+    [HttpPost("preview")]
+    [ProducesResponseType(typeof(ApiResponseWithData<PreviewSaleResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Preview([FromBody] CreateSaleRequest request, CancellationToken cancellationToken)
+    {
+        var validator = new PreviewSaleRequestValidator();
+        var validationResult = await validator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+            return BadRequest(validationResult.Errors);
+
+        // No async work currently; keep signature for consistency.
+        await Task.CompletedTask;
+        var preview = BuildPreview(request);
+
+        return Ok(new ApiResponseWithData<PreviewSaleResponse>
+        {
+            Success = true,
+            Message = "Preview generated successfully",
+            Data = preview
+        });
+    }
+
+    private static PreviewSaleResponse BuildPreview(CreateSaleRequest request)
+    {
+        const int maxIdenticalItems = 20;
+
+        var res = new PreviewSaleResponse();
+
+        foreach (var i in request.Items)
+        {
+            var item = new PreviewSaleItem
+            {
+                ProductId = i.ProductId,
+                ProductDescription = i.ProductDescription ?? string.Empty,
+                Quantity = i.Quantity,
+                UnitPrice = i.UnitPrice
+            };
+
+            if (i.Quantity > maxIdenticalItems)
+            {
+                item.Status = PreviewItemStatus.Blocked;
+                item.Reasons.Add(new PreviewReason
+                {
+                    Code = "QTY_OVER_20",
+                    Message = $"Limite de {maxIdenticalItems} unidades por produto. Você selecionou {i.Quantity}."
+                });
+            }
+            else
+            {
+                item.Status = PreviewItemStatus.Ok;
+            }
+
+            // Discounts follow current domain rule (SaleItem.Recalculate).
+            item.DiscountRate = i.Quantity switch
+            {
+                < 4 => 0m,
+                >= 10 and <= 20 => 0.20m,
+                _ => 0.10m
+            };
+
+            item.GrossAmount = i.UnitPrice * i.Quantity;
+            item.DiscountAmount = item.GrossAmount * item.DiscountRate;
+            item.NetAmount = item.GrossAmount - item.DiscountAmount;
+
+            item.Reasons.Add(new PreviewReason
+            {
+                Code = item.DiscountRate switch
+                {
+                    0.20m => "QTY_DISCOUNT_20",
+                    0.10m => "QTY_DISCOUNT_10",
+                    _ => "NO_DISCOUNT_LT_4"
+                },
+                Message = item.DiscountRate switch
+                {
+                    0.20m => "20% de desconto por comprar 10 a 20 unidades.",
+                    0.10m => "10% de desconto por comprar 4 a 9 unidades.",
+                    _ => "Sem desconto para menos de 4 unidades."
+                }
+            });
+
+            res.Items.Add(item);
+        }
+
+        res.IsBlocked = res.Items.Any(x => x.Status == PreviewItemStatus.Blocked);
+        if (res.IsBlocked)
+        {
+            res.Reasons.Add(new PreviewReason
+            {
+                Code = "ORDER_BLOCKED",
+                Message = "Existem itens bloqueados que impedem a finalização do pedido."
+            });
+        }
+
+        res.Summary.GrossTotal = res.Items.Sum(i => i.GrossAmount);
+        res.Summary.NetTotal = res.Items.Sum(i => i.NetAmount);
+        res.Summary.DiscountTotal = res.Items.Sum(i => i.DiscountAmount);
+
+        return res;
     }
 
     /// <summary>

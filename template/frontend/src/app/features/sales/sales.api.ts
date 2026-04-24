@@ -50,3 +50,36 @@ export type ListSalesResponse = {
   totalPages: number;
 };
 
+export type PreviewItemStatus = 'Ok' | 'Blocked';
+
+export type PreviewReason = {
+  code: string;
+  message: string;
+};
+
+export type PreviewSaleSummary = {
+  grossTotal: number;
+  netTotal: number;
+  discountTotal: number;
+};
+
+export type PreviewSaleItem = {
+  productId: string;
+  productDescription: string;
+  quantity: number;
+  unitPrice: number;
+  grossAmount: number;
+  discountRate: number;
+  discountAmount: number;
+  netAmount: number;
+  status: PreviewItemStatus;
+  reasons: PreviewReason[];
+};
+
+export type PreviewSaleResponse = {
+  isBlocked: boolean;
+  reasons: PreviewReason[];
+  items: PreviewSaleItem[];
+  summary: PreviewSaleSummary;
+};
+

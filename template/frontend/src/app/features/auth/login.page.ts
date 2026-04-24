@@ -592,7 +592,7 @@ export class LoginPage {
       .login({ email: email!, password: password! })
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
-        next: () => this.router.navigateByUrl('/'),
+        next: () => this.navigateAfterAuth(),
         error: (err) => this.handleLoginHttpError(err as HttpErrorResponse)
       });
   }
@@ -620,13 +620,34 @@ export class LoginPage {
           this.signupServerErrors.set({});
           // auto-login after signup to test end-to-end flow
           this.auth.login({ email: v.email!, password: v.password! }).subscribe({
-            next: () => this.router.navigateByUrl('/'),
+            next: () => this.navigateAfterAuth(),
             error: () =>
               this.snack.open('Conta criada, mas falhou ao autenticar. Tente entrar.', 'OK', { duration: 3500 })
           });
         },
         error: (err) => this.handleSignupHttpError(err as HttpErrorResponse)
       });
+  }
+
+  private navigateAfterAuth() {
+    const s = this.auth.session();
+    const role = (s?.role ?? '').trim();
+
+    if (this.auth.isAdminOrManager()) {
+      this.router.navigateByUrl('/dashboard');
+      return;
+    }
+
+    if (this.auth.isCustomer()) {
+      this.router.navigateByUrl('/loja');
+      return;
+    }
+
+    // Avoid loops when role is None/unknown.
+    this.auth.logout();
+    const msg = role ? `Seu usuário está sem permissão (perfil: ${role}).` : 'Seu usuário está sem permissão.';
+    this.snack.open(`${msg} Entre novamente com outro usuário.`, 'OK', { duration: 4500 });
+    this.router.navigateByUrl('/login');
   }
 
   private serverValidationLines(by: Record<string, string[]>): string[] {

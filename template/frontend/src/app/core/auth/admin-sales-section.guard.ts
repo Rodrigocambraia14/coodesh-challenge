@@ -7,5 +7,10 @@ export const adminSalesSectionGuard: CanMatchFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
   if (auth.isAdminOrManager()) return true;
-  return router.createUrlTree(['/loja']);
+
+  if (auth.isCustomer()) return router.createUrlTree(['/loja']);
+
+  // Role missing/None/unknown: force login again.
+  auth.logout();
+  return router.createUrlTree(['/login']);
 };

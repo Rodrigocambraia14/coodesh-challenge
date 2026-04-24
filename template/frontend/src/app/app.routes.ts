@@ -1,8 +1,8 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
-import { adminHomeGuard } from './core/auth/admin-home.guard';
 import { adminSalesSectionGuard } from './core/auth/admin-sales-section.guard';
 import { customerSectionGuard } from './core/auth/customer-section.guard';
+import { homeRedirectGuard } from './core/auth/home-redirect.guard';
 import { roleGuard } from './core/auth/role.guard';
 
 export const routes: Routes = [
@@ -15,8 +15,7 @@ export const routes: Routes = [
     canMatch: [authGuard],
     loadComponent: () => import('./shell/app-shell.component').then((m) => m.AppShellComponent),
     children: [
-      { path: '', pathMatch: 'full', canMatch: [adminHomeGuard], redirectTo: 'dashboard' },
-      { path: '', pathMatch: 'full', redirectTo: 'loja' },
+      { path: '', pathMatch: 'full', canMatch: [homeRedirectGuard], redirectTo: '' },
       {
         path: 'dashboard',
         canMatch: [roleGuard(['Admin', 'Manager'])],
